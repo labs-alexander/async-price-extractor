@@ -15,3 +15,14 @@ async def worker(netloc, queue, sem):
 
 		queue.task_done()
 		processed_count += 1
+
+
+def save_result(response):
+	price = parser.get_price(response.text)
+	
+	if price:
+		print(price)
+		database.update_job(job_id=job_id, price=price[1].text, status="processed")
+	else:
+		print("failed")
+		database.update_job(job_id=job_id, status="failed")
