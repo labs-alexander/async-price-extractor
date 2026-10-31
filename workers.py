@@ -12,7 +12,6 @@ async def worker(netloc, queue, sem):
 			print(response.status_code)
 			save_result(job_id, response)
 			await asyncio.sleep(jitter)
-			print(f"sleeped for {jitter} secs")
 
 		queue.task_done()
 		processed_count += 1
