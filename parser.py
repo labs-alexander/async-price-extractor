@@ -3,71 +3,52 @@ import re
 import config
 import sys
 
-# =====================================================================
-# UTILS/TEMPORARY
-# =====================================================================
-
-def test_function(html_path):
-    with open(html_path, "r", encoding="utf-8") as f:
-        return f.read()
-
-# =====================================================================
-# FLOW TEST
-# =====================================================================
-
 FILEPATH = ""
-
-def main():
-    html_file = test_function(FILEPATH)
-    results = get_price(html=html_file)
-    print(results)
 
 # =====================================================================
 # HEURISTIC PARSING
 # =====================================================================
 
-def parser1(html, pattern=config.PRICE_TAGS):
-    results = re.findall(pattern, html)
-    return results
+def get_price(html):
+
+	soup = BeautifulSoup(html, "lxml")
+
+	for tag in soup([config.EXCLUDED_TAGS):
+		tag.decompose()
 
 
-def get_price(html, pattern=config.PRICE_TAGS):
-    soup = BeautifulSoup(html, "lxml")
-    for tag in soup(config.EXCLUDED_TAGS):
-        tag.decompose()
+	possible_prices = soup.find_all(string=re.compile(config.NUMBER_PATTERN))
 
-    possible_prices = soup.find_all(string=re.compile(config.NUMBER_PATTERN))
+	price_candidates = []
 
-    price_candidates = []
-    for element in possible_prices:
-        is_valid = True
-        curr = element
+	for element in possible_prices:
+		is_valid = True
+		curr = element
+		for _ in range(3):
+			if not curr or not is_valid:
+				break
 
-        for _ in range(3):
-            if not curr:
-                break
-                
-            if any(excluded_word in curr.text.lower() for excluded_word in config.EXCLUDED_TERMS):
-                is_valid = False
+			if any(et in curr.parent.text.lower() for et in config.EXCLUDED_TERMS):
+				is_valid = False
 
-            curr = curr.parent
+			curr = curr.parent
 
-        if not is_valid:
-            continue
+		if not is_valid:
+			continue
 
-        classes = " ".join(curr.get("class", [])) if isinstance(curr.get("class"), list) else curr.get("class", "")
-        element_id = curr.get("id", "")
-        combined_attributes = f"{classes} {element_id}".lower()
+		classes = " ".join(curr.get("class", [])) if isinstance(curr.get("class"), list) else curr.get("class", "")
+		element_ids = curr.get("id", "")
+		combined_attributes = f"{classes} {element_ids}".lower()
 
-        if re.search(config.PRICE_TAGS, combined_attributes) or any(w in curr.text for w in config.CURRENCY_SYMBOLS):
-            parent = element.parent
-            if not parent:
-                continue
+		if any(s in curr.text for s in config.CURRENCY_SYMBOLS) or re.search(config.PRICE_TAGS, combined_attributes):
+			parent = element.parent
+			if not parent:
+				continue
 
-            price_candidates.append(parent)
+			price_candidates.append(parent)
 
-    return price_candidates
 
+	return price_candidates
 
 def find_name_candidates(html):
     name_candidates = []
@@ -78,11 +59,7 @@ def find_name_candidates(html):
         name_candidates.append(h1)
 
     return name_candidates
-
-
-def clean_html():
-    pass    
-
+    
 
 def find_candidates(html_bruto):
     soup_clean = BeautifulSoup(html_bruto, "lxml")
@@ -115,10 +92,3 @@ def find_candidates(html_bruto):
 
     return price_candidates, name_candidates
 
-if __name__ == "__main__":
-    html = test_function(FILEPATH)
-    price, name = find_candidates(html)
-    print(f"Old version: {price}")
-    print("New version:")
-    main()
-    print(find_name_candidates(html))
