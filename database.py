@@ -64,25 +64,19 @@ def update_job(job_id, db_path=DB_PATH, **kwargs):
 		return cur.rowcount
 
 
-def enqueue(limit=2, db_path=DB_PATH):
+def enqueue(netloc, limit=20, db_path=DB_PATH):
 	with get_cursor(isolation_level="IMMEDIATE") as cur:
-		cur.execute("""SELECT DISTINCT netloc FROM jobs WHERE status = ?""", ("pending",))
-		netloc = cur.fetchone()
-		if not netloc:
-			return []
-		netloc_val = netloc[0]
-
 		cur.execute("""UPDATE jobs
 			SET status = ?
 			WHERE id IN (
-				SELECT id FROM jobs
+				SELECT id
 				WHERE netloc = ? AND status = ?
 				LIMIT ?
 				)
-			RETURNING id, url;
-		""", ("processing", netloc_val, "pending", limit))
-
+			RETURNING id, url, netloc;
+			""", "processing", netloc, "pending", limit)
 		return cur.fetchall()
+
 
 def test():
 	print(get_job(DB_PATH))
