@@ -1,34 +1,42 @@
-import sqlite3
-from contextlib import contextmanager
+import os
+import asyncio
+from dotenv import load_dotenv
+import aiosqlite
+from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
-DB_PATH = ""
+import config
 
-@contextmanager
-def get_cursor(db_path=DB_PATH, isolation_level="DEFERRED"):
-	con = sqlite3.connect(db_path, isolation_level=isolation_level)
-	cur = con.cursor()
+load_dotenv()
+DB_PATH = os.getenv("DB_PATH")
+
+
+@asynccontextmanager
+async def get_cursor(db_path=DB_PATH, isolation_level="DEFERRED"):
+	con =  await aiosqlite.connect(db_path, isolation_level=isolation_level)
 
 	try:
+		cur = await con.cursor()
 		yield cur
-		con.commit()
+		await con.commit()
 
 	except Exception:
-		con.rollback()
+		await con.rollback()
 		raise
 
 	finally:
-		con.close()
+		await con.close()
 
 
-def setup_database(db_path=DB_PATH):
-	with get_cursor(db_path) as cur:	
-		cur.execute("""CREATE TABLE IF NOT EXISTS jobs (
+async def setup_database(db_path=DB_PATH):
+	async with get_cursor(db_path) as cur:	
+		await cur.execute("""CREATE TABLE IF NOT EXISTS jobs (
 
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			url TEXT,
 			netloc TEXT,
 			status TEXT DEFAULT "pending",
-			price TEXT DEFAULT 'PREÇO AQUI',
+			price TEXT DEFAULT '$0',
 			selector_type TEXT,
 			selector_value TEXT,
 			created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -36,21 +44,21 @@ def setup_database(db_path=DB_PATH):
 			attempts INTEGER DEFAULT 0
 			)""")
 
-		cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_url_created ON jobs(url, created_at);")
-		cur.execute("""
+		await cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_url_created ON jobs(url, created_at);")
+		await cur.execute("""
 		    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_url 
 		    ON jobs(url) 
 		    WHERE status != 'done';
 		""")
 
 
-def insert_job(url, db_path=DB_PATH):
+async def insert_job(url, db_path=DB_PATH):
 	netloc = urlparse(url).netloc
-	with get_cursor(db_path) as cur:
-		cur.execute("""INSERT OR IGNORE INTO jobs (url, netloc) VALUES (?, ?)""", (url, netloc))
+	async with get_cursor(db_path) as cur:
+		await cur.execute("""INSERT OR IGNORE INTO jobs (url, netloc) VALUES (?, ?)""", (url, netloc))
 
 
-def update_job(job_id, db_path=DB_PATH, **kwargs):
+async def update_job(job_id, db_path=DB_PATH, **kwargs):
 
 	if not kwargs:
 		return []
@@ -60,20 +68,21 @@ def update_job(job_id, db_path=DB_PATH, **kwargs):
 	query = f"""UPDATE jobs SET {fields}, updated_at = CURRENT_TIMESTAMP
 			WHERE id = ?
 				"""
-	with get_cursor(db_path, isolation_level="IMMEDIATE") as cur:
-		cur.execute(query, values)
+	async with get_cursor(db_path, isolation_level="IMMEDIATE") as cur:
+		await cur.execute(query, values)
 		return cur.rowcount
 
 
-def get_pending_netlocs(db_path=DB_PATH):
-	with get_cursor(db_path) as cur:
-		cur.execute("SELECT DISTINCT netloc FROM jobs WHERE status = ?", ("pending",))
-		return [row[0] for row in cur.fetchall()]
+async def get_pending_netlocs(db_path=DB_PATH):
+	async with get_cursor(db_path) as cur:
+		await cur.execute("SELECT DISTINCT netloc FROM jobs WHERE status = ?", ("pending",))
+		results = await cur.fetchall()
+		return [row[0] for row in results]
 
 
-def enqueue(netloc, limit=20, db_path=DB_PATH):
-	with get_cursor(db_path, isolation_level="IMMEDIATE") as cur:
-		cur.execute("""UPDATE jobs
+async def enqueue(netloc, limit=20, db_path=DB_PATH):
+	async with get_cursor(db_path, isolation_level="IMMEDIATE") as cur:
+		await cur.execute("""UPDATE jobs
 			SET status = ?
 			WHERE id IN (
 				SELECT id FROM jobs
@@ -82,15 +91,12 @@ def enqueue(netloc, limit=20, db_path=DB_PATH):
 				)
 			RETURNING id, url;
 			""", ("processing", netloc, "pending", limit))
-
-		return cur.fetchall()
-
-
-def get_selector(netloc, db_path=DB_PATH):
-	with get_cursor(db_path) as cur:
-		cur.execute("SELECT selector_value FROM jobs WHERE netloc = ?", (netloc,))
-		return cur.fetchone()[0]
+		results = await cur.fetchall()
+		return results
 
 
-if __name__ == "__main__":
-	test()
+async def get_selector(netloc, db_path=DB_PATH):
+	async with get_cursor(db_path) as cur:
+		await cur.execute("SELECT selector_value FROM jobs WHERE netloc = ?", (netloc,))
+		results = await cur.fetchone()
+		return results[0]
