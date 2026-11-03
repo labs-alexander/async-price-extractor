@@ -27,9 +27,13 @@ async def worker(netloc, sem):
 			processed_count += 1
 
 
-def save_result(job_id, price, selector, selector_type="css"):
+async def save_result(job_id, price, selector, selector_type="css"):
 	if price:
-		database.update_job(job_id=job_id, price=price, status="processed", selector_value=selector, selector_type=selector_type)
+		if isinstance(price, Tag):
+			price = price.text
+		await database.update_job(job_id=job_id, price=price, status="processed", selector_value=selector, selector_type=selector_type)
 	else:
 		print(f"failed: preço nao encontrado {price}")
-		database.update_job(job_id=job_id, status="failed")
+		await database.update_job(job_id=job_id, status="pending")
+
+
