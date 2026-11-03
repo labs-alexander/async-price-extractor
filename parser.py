@@ -83,4 +83,4 @@ def build_css_selector(element):
 
 
 def choose_price(candidates):
-	return candidates[0]
+	return candidates[0].text, candidates[0]
