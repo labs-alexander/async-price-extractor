@@ -1,13 +1,18 @@
-from async_tls_client import AsyncSession
-import config
-from exceptions import STATUS_MAP, RateLimitedError, BlockedError
 import asyncio
 
+from async_tls_client import AsyncSession
 
-async def fetch_info(url, method="GET", impersonate=config.IMPERSONATE):
-	async with AsyncSession(client_identifier=impersonate) as session:
-		response = await session.execute_request(method=method, url=url)
-		return classify_response(response)
+import config
+from exceptions import STATUS_MAP, BlockedError, RateLimitedError
+
+
+def create_session(impersonate=config.IMPERSONATE):
+	return AsyncSession(client_identifier=impersonate)
+
+
+async def fetch_info(url, method="GET", session):
+	response = await session.execute_request(url=url, method=method)
+	return classify_response(response)
 
 
 def classify_response(response):
