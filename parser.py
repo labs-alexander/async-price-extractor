@@ -59,36 +59,28 @@ def find_name_candidates(html):
         name_candidates.append(h1)
 
     return name_candidates
-    
 
-def find_candidates(html_bruto):
-    soup_clean = BeautifulSoup(html_bruto, "lxml")
-    for tag in soup_clean(config.EXCLUDED_TAGS):
-        tag.decompose()
 
-    number_pattern = re.compile(config.NUMBER_PATTERN)
-    currency_symbols = config.CURRENCY_SYMBOLS
+def extract_element(html, selector):
+	if not selector or not html:
+		return
+	soup = BeautifulSoup(html, "lxml")
+	return soup.select_one(selector)
 
-    price_candidates = []
-    for element in soup_clean.find_all(string=lambda text: text and number_pattern.search(text)):
-        parent = element.find_parent()
-        if not parent:
-            continue
+#=====================================================================
+# 	 						    HELPER
+#=====================================================================
 
-        texto_parent = parent.text
-        if not any(s in texto_parent for s in currency_symbols):
-            continue
+def build_css_selector(element):
+	if element.get("id"):
+		return f"#{element['id']}"
 
-        texto_lower = texto_parent.lower()
-        if any(p in texto_lower for p in config.EXCLUDED_TERMS):
-            continue
+	classes = element.get("class")
+	if classes:
+		return f"{element.name}.{'.'.join(classes)}"
 
-        price_candidates.append(str(parent))
+	return element.name
 
-    name_candidates = []
-    h1 = soup_clean.find("h1")
-    if h1:
-        name_candidates.append(str(h1))
 
-    return price_candidates, name_candidates
-
+def choose_price(candidates):
+	return candidates[0]
