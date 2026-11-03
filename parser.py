@@ -9,11 +9,11 @@ FILEPATH = ""
 # HEURISTIC PARSING
 # =====================================================================
 
-def get_price(html):
+def get_price_candidates(html):
 
 	soup = BeautifulSoup(html, "lxml")
 
-	for tag in soup([config.EXCLUDED_TAGS):
+	for tag in soup(config.EXCLUDED_TAGS):
 		tag.decompose()
 
 
