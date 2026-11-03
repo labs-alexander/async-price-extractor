@@ -97,6 +97,38 @@ async def enqueue(netloc, limit=20, db_path=DB_PATH):
 
 async def get_selector(netloc, db_path=DB_PATH):
 	async with get_cursor(db_path) as cur:
-		await cur.execute("SELECT selector_value FROM jobs WHERE netloc = ?", (netloc,))
+		await cur.execute("SELECT selector_value FROM jobs WHERE netloc = ? AND selector_value IS NOT NULL LIMIT 1", (netloc,))
 		results = await cur.fetchone()
-		return results[0]
+		return results[0] if results else None
+
+
+async def get_attempts(job_id, db_path=DB_PATH):
+	async with get_cursor(db_path) as cur:
+		await cur.execute("SELECT attempts FROM jobs WHERE id = ?", (job_id,))
+		result = await cur.fetchone()
+		return result[0] if result else 0
+
+#=====================================================================
+# 	 							FLOW TEST
+#=====================================================================
+
+async def test():
+    await setup_database()
+
+    for url in getattr(config, "URLS", []):
+        await insert_job(url)
+
+    async with get_cursor() as cur:
+        sim = input("resete? ")
+        if sim == "s":
+            await cur.execute("UPDATE jobs SET status = 'pending'")
+
+        await cur.execute("SELECT id, netloc, price, status, selector_value, selector_type FROM jobs")
+        results = await cur.fetchall()
+
+        for r in results:
+            print(r)
+
+
+if __name__ == "__main__":
+    asyncio.run(test())
