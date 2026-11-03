@@ -12,9 +12,11 @@ import parser
 
 logger = logging.getLogger(__name__)
 
+
 load_dotenv()
 SEM = int(os.getenv("SEMAPHORE"))
 MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS"))
+
 
 async def worker(netloc, sem):
 	processed_count = 0
@@ -43,6 +45,14 @@ async def worker(netloc, sem):
 # 	 						    HELPERS
 #=====================================================================
 
+async def handle_failure(job_id):
+	attempts = await database.get_attempts(job_id)
+	if attempts >= MAX_ATTEMPTS:
+		await database.update_job(job_id, status="failed")
+	else:
+		await database.update_job(job_id, status="pending", attempts=attempts + 1)
+
+
 async def process_job(job_id, url, sem, selector, session):
 	try:
 		async with sem:
@@ -64,23 +74,19 @@ async def process_job(job_id, url, sem, selector, session):
 
 			return price, selector
 	except Exception:
-		await database.update_job(job_id, status="pending")
+		handle_failure(job_id)
 		raise
 			
 
 def calc_jitter(processed_count):
-	return uniform(2, 4)
+	return uniform(3,5)
 
 
 async def save_result(job_id, price, selector, selector_type="css"):
 	if price:
 		await database.update_job(job_id=job_id, price=price, status="processed", selector_value=selector, selector_type=selector_type)
 	else:
-		row = await database.get_attempts(job_id)
-		if row >= MAX_ATTEMPTS:
-			await database.update_job(job_id=job_id, status="failed")
-		else:
-			await database.update_job(job_id=job_id, status="pending", attempts=row + 1)
+		handle_failure(job_id)
 
 
 async def shutdown(db_path=database.DB_PATH):
@@ -93,27 +99,14 @@ async def shutdown(db_path=database.DB_PATH):
 #=====================================================================
 
 async def main():
-	loop = asyncio.get_running_loop()
-	stop_event = asyncio.Event()
-
-	for sig in (signal.SIGINT, signal.SIGTERM):
-		loop.add_signal_handler(sig, stop_event.set)
-
-	netlocs = await database.get_pending_netlocs()
-	tasks = [asyncio.create_task(worker(netloc, SEM)) for netloc in netlocs]
-
-	await asyncio.wait(
-		[asyncio.create_task(stop_event.wait()), *tasks],
-		return_when=asyncio.FIRST_COMPLETED
-	)
-
-	if stop_event.is_set():
-		for t in tasks:
-			t.cancel()
-		await shutdown()
+    netlocs = await database.get_pending_netlocs()
+    tasks = [asyncio.create_task(worker(netloc, SEM)) for netloc in netlocs]
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
-	asyncio.run(main())
-
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        asyncio.run(shutdown())
 	
