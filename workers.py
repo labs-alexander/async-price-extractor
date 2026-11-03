@@ -41,3 +41,20 @@ def save_result(job_id, price, selector, selector_type="css"):
 	else:
 		print(f"failed: preço nao encontrado {price}")
 		database.update_job(job_id=job_id, status="failed")
+
+
+#=====================================================================
+# 	 							FLOW TEST
+#=====================================================================
+
+async def main():
+	netlocs = database.get_pending_netlocs()
+	print(netlocs)
+	sem = asyncio.Semaphore(2)
+	tasks = [asyncio.create_task(worker(netloc, sem)) for netloc in netlocs]
+	await asyncio.gather(*tasks)
+
+
+if __name__ == "__main__":
+	asyncio.run(main())
+
