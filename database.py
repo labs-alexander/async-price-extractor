@@ -20,20 +20,22 @@ def get_cursor(db_path=DB_PATH, isolation_level="DEFERRED"):
 		con.close()
 
 
-def setup_database():
-	with get_cursor(DB_PATH) as cur:	
+def setup_database(db_path=DB_PATH):
+	with get_cursor(db_path) as cur:	
 		cur.execute("""CREATE TABLE IF NOT EXISTS jobs (
 
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			url TEXT,
 			netloc TEXT,
 			status TEXT DEFAULT "pending",
+			price TEXT DEFAULT 'PREÇO AQUI',
+			selector_type TEXT,
+			selector_value TEXT,
 			created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 			updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-			attempts INTEGER DEFAULT 0,
-			price TEXT DEFAULT 'PREÇO AQUI'
-
+			attempts INTEGER DEFAULT 0
 			)""")
+
 		cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_url_created ON jobs(url, created_at);")
 		cur.execute("""
 		    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_url 
@@ -44,7 +46,6 @@ def setup_database():
 
 def insert_job(url, db_path=DB_PATH):
 	netloc = urlparse(url).netloc
-	print(__name__, f"netloc {netloc}")
 	with get_cursor(db_path) as cur:
 		cur.execute("""INSERT OR IGNORE INTO jobs (url, netloc) VALUES (?, ?)""", (url, netloc))
 
@@ -59,33 +60,36 @@ def update_job(job_id, db_path=DB_PATH, **kwargs):
 	query = f"""UPDATE jobs SET {fields}, updated_at = CURRENT_TIMESTAMP
 			WHERE id = ?
 				"""
-	with get_cursor(isolation_level="IMMEDIATE") as cur:
+	with get_cursor(db_path, isolation_level="IMMEDIATE") as cur:
 		cur.execute(query, values)
 		return cur.rowcount
 
 
-def get_pending_netlocs():
-	with get_cursor() as cur:
+def get_pending_netlocs(db_path=DB_PATH):
+	with get_cursor(db_path) as cur:
 		cur.execute("SELECT DISTINCT netloc FROM jobs WHERE status = ?", ("pending",))
 		return [row[0] for row in cur.fetchall()]
 
 
 def enqueue(netloc, limit=20, db_path=DB_PATH):
-	with get_cursor(isolation_level="IMMEDIATE") as cur:
+	with get_cursor(db_path, isolation_level="IMMEDIATE") as cur:
 		cur.execute("""UPDATE jobs
 			SET status = ?
 			WHERE id IN (
-				SELECT id
+				SELECT id FROM jobs
 				WHERE netloc = ? AND status = ?
 				LIMIT ?
 				)
-			RETURNING id, url, netloc;
-			""", "processing", netloc, "pending", limit)
+			RETURNING id, url;
+			""", ("processing", netloc, "pending", limit))
+
 		return cur.fetchall()
 
 
-def test():
-	print(get_job(DB_PATH))
+def get_selector(netloc, db_path=DB_PATH):
+	with get_cursor(db_path) as cur:
+		cur.execute("SELECT selector_value FROM jobs WHERE netloc = ?", (netloc,))
+		return cur.fetchone()[0]
 
 
 if __name__ == "__main__":
