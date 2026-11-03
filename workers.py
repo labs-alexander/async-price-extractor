@@ -29,12 +29,10 @@ async def worker(netloc, sem):
 					candidates = parser.get_price_candidates(response.text)
 					price, price_tag = parser.choose_price(candidates)
 					selector = parser.build_css_selector(price_tag)
-
-
+					
 				save_result(job_id, price, selector)
 				processed_count += 1
 				await asyncio.sleep(jitter)
-
 
 
 def save_result(job_id, price, selector, selector_type="css"):
