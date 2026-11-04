@@ -12,6 +12,6 @@ Python (asyncio), aiosqlite, ...
 
 Running it ...
 
-#Out of scope
+**Out of scope**
 
 This project is a portfolio piece focused on concurrency, task queuing, and asynchronous persistence. Anti-bot bypass logic is not part of this implementation.
